@@ -1,0 +1,250 @@
+```{r}
+# Install gtrendshealth if not already installed
+# install.packages("gtrendshealth")
+
+library(gtrendshealth)
+library(forecast)
+library(ggplot2)
+library(ggsci)
+library(systemfonts)
+library(showtext)
+library(dplyr)
+library(patchwork)
+library(grid)
+```
+
+```{r}
+# INSTRUCTIONS FOR USERS: Replace "YOUR_API_KEY_HERE" with your own Google Trends for Health API key.
+# Information about the API and gtrendshealth package can be found on: https://github.com/CDCgov/gtrendshealth
+set_gt_api_key(
+  key = "YOUR_API_KEY_HERE",
+  install = TRUE,
+  overwrite = TRUE
+)
+```
+
+*ARIMA Models*
+```{r}
+#Oprah event analysis
+# ---- 1. Setup Oprah Terms and Event Date ----
+terms_oprah <- c(
+  "ozempic", "wegovy", "mounjaro", "zepbound", "victoza",
+  "semaglutide", "tirzepatide", "glp-1", "glp 1", "glp1"
+)
+start_oprah <- as.Date("2024-02-15")
+end_oprah   <- as.Date("2024-04-17")
+event_oprah <- as.Date("2024-03-17") # Pre-event data only
+
+# ---- 2. Download and Aggregate Oprah Data ----
+daily_trends_oprah <- lapply(terms_oprah, function(term) {
+  df <- get_health_trends(
+    terms = term,
+    resolution = "day",
+    start = start_oprah,
+    end = end_oprah,
+    country = "US"
+  )
+  df$term <- term
+  df
+})
+all_daily_oprah <- bind_rows(daily_trends_oprah)
+agg_daily_oprah <- all_daily_oprah %>%
+  group_by(date) %>%
+  summarize(total_value = sum(value, na.rm = TRUE)) %>%
+  arrange(date)
+
+# ---- 3. Train/Test Split for Oprah ----
+train_daily_oprah <- agg_daily_oprah %>% filter(date <= event_oprah)
+test_daily_oprah  <- agg_daily_oprah %>% filter(date >= event_oprah)
+
+# ---- 4. ARIMA Fit and Forecast for Oprah ----
+train_ts_oprah <- ts(train_daily_oprah$total_value, frequency = 1)
+fit_oprah <- auto.arima(train_ts_oprah, d = 0)
+n_test_oprah <- nrow(test_daily_oprah)
+fc_oprah <- forecast(fit_oprah, h = n_test_oprah)
+
+# ---- 5. Quantify Event Impact (Oprah) ----
+impact_date_oprah <- test_daily_oprah$date[3]         # 2024-03-19
+obs_impact_oprah <- test_daily_oprah$total_value[3]
+pred_impact_oprah <- fc_oprah$mean[3]
+ci_impact_oprah <- c(fc_oprah$lower[3, "95%"], fc_oprah$upper[3, "95%"])
+
+cat("==== Oprah Impact Assessment ====\n")
+cat("Date:", as.character(impact_date_oprah), "\n")
+cat("Observed:", obs_impact_oprah, "\n")
+cat("Predicted:", round(pred_impact_oprah, 2), "\n")
+cat("95% CI: [", round(ci_impact_oprah[1], 2), ",", round(ci_impact_oprah[2], 2), "]\n")
+cat("Within 95% CI:", obs_impact_oprah >= ci_impact_oprah[1] & obs_impact_oprah <= ci_impact_oprah[2], "\n")
+cat("Difference (Obs - Pred):", round(obs_impact_oprah - pred_impact_oprah, 2), "\n\n")
+
+# ---- 6. Prepare Data for Plotting (Oprah) ----
+plot_df_oprah <- agg_daily_oprah %>%
+  mutate(set = ifelse(date <= event_oprah, "train", "test"))
+
+fc_oprah_df <- data.frame(
+  date = test_daily_oprah$date,
+  pred = fc_oprah$mean,
+  lower = fc_oprah$lower[, "95%"],
+  upper = fc_oprah$upper[, "95%"]
+)
+```
+
+```{r}
+#Serena event analysis
+# ---- 1. Setup Serena Terms and Event Date ----
+terms_serena <- c("glp-1", "glp 1", "glp1")
+start_serena <- as.Date("2025-07-20")
+end_serena   <- as.Date("2025-09-20")
+event_serena <- as.Date("2025-08-20")
+
+# ---- 2. Download and Aggregate Serena Data ----
+daily_trends_serena <- lapply(terms_serena, function(term) {
+  df <- get_health_trends(
+    terms = term,
+    resolution = "day",
+    start = start_serena,
+    end = end_serena,
+    country = "US"
+  )
+  df$term <- term
+  df
+})
+all_daily_serena <- bind_rows(daily_trends_serena)
+agg_daily_serena <- all_daily_serena %>%
+  group_by(date) %>%
+  summarize(total_value = sum(value, na.rm = TRUE)) %>%
+  arrange(date)
+
+# ---- 3. Train/Test Split for Serena ----
+train_daily_serena <- agg_daily_serena %>% filter(date <= event_serena)
+test_daily_serena  <- agg_daily_serena %>% filter(date >= event_serena)
+
+# ---- 4. ARIMA Fit and Forecast for Serena ----
+train_ts_serena <- ts(train_daily_serena$total_value, frequency = 1)
+fit_serena <- auto.arima(train_ts_serena)
+n_test_serena <- nrow(test_daily_serena)
+fc_serena <- forecast(fit_serena, h = n_test_serena)
+
+# ---- 5. Quantify Event Impact (Serena) ---
+impact_date_serena <- test_daily_serena$date[2] # 2025-08-21
+obs_impact_serena <- test_daily_serena$total_value[2]
+pred_impact_serena <- fc_serena$mean[2]
+ci_impact_serena <- c(fc_serena$lower[2, "95%"], fc_serena$upper[2, "95%"])
+
+cat("==== Serena Impact Assessment ====\n")
+cat("Date:", as.character(impact_date_serena), "\n")
+cat("Observed:", obs_impact_serena, "\n")
+cat("Predicted:", round(pred_impact_serena, 2), "\n")
+cat("95% CI: [", round(ci_impact_serena[1], 2), ",", round(ci_impact_serena[2], 2), "]\n")
+cat("Difference (Obs - Pred):", round(obs_impact_serena - pred_impact_serena, 2), "\n\n")
+
+# ---- 6. Prepare Data for Plotting (Serena) ----
+plot_df_serena <- agg_daily_serena %>%
+  mutate(set = ifelse(date < event_serena, "train", "test"))
+
+fc_serena_df <- data.frame(
+  date = test_daily_serena$date,
+  pred = fc_serena$mean,
+  lower = fc_serena$lower[, "95%"],
+  upper = fc_serena$upper[, "95%"]
+)
+```
+
+*Figure Generation*
+```{r}
+# ---- 1. Font and Style Setup ----
+# Using a standard sans-serif font for reproducibility. 
+# Users can substitute their preferred fonts here using the systemfonts package.
+font_family <- "sans" 
+
+# Colors (example)
+nejm_cols <- pal_nejm("default")(8)
+nejm_red <- nejm_cols[1]   
+nejm_blue <- nejm_cols[2]  
+nejm_bg <- "white"       
+event_line_col <- "black"
+pre_event_col <- "#BDBDBD" 
+conf_fill <- "#F0E9DF"     
+conf_pred_col <- "#C77C2C" 
+
+# ==============================================================================
+# PANEL A: OPRAH
+# ==============================================================================
+oprah_breaks <- seq(4000, 10000, by = 1000)
+pA_pred <- fc_oprah_df %>%
+  filter(date >= min(plot_df_oprah$date), date <= max(plot_df_oprah$date))
+
+pA <- ggplot() +
+  geom_ribbon(data = pA_pred, aes(x = date, ymin = lower, ymax = upper), inherit.aes = FALSE, fill = conf_fill, alpha = 0.8) +
+  geom_line(data = pA_pred, aes(x = date, y = pred), inherit.aes = FALSE, color = conf_pred_col, linetype = "42", linewidth = 1.0) +
+  geom_line(data = plot_df_oprah, aes(x = date, y = total_value), color = pre_event_col, linewidth = 1.4, lineend = "round") +
+  geom_line(data = subset(plot_df_oprah, date >= event_oprah), aes(x = date, y = total_value), color = nejm_red, linewidth = 1.4, lineend = "round") +
+  annotate("segment", x = event_oprah, xend = event_oprah, y = 4000, yend = 9500, color = event_line_col, linewidth = 1.2) +
+  annotation_custom(grob = textGrob("//", x = unit(-0.08, "npc"), y = unit(-0.025, "npc"), gp = gpar(fontsize = 13, fontface = "bold", col = "black"))) +
+  scale_x_date(expand = c(0, 0), breaks = c(min(plot_df_oprah$date), event_oprah, max(plot_df_oprah$date)), labels = function(x) format(x, "%b %d")) +
+  scale_y_continuous(breaks = oprah_breaks, limits = c(4000, 10000), expand = c(0,0)) +
+  labs(title = "A", y = "Google Queries (per 10 million searches)", x = NULL) +
+  theme_bw(base_size = 14, base_family = font_family) +
+  theme(
+    panel.background = element_rect(fill = nejm_bg, color = nejm_bg),
+    plot.background = element_rect(fill = nejm_bg, color = NA),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.y = element_line(color="#d9d9d9", linewidth=0.5),
+    panel.grid.minor.y = element_blank(),
+    axis.line = element_line(color = "black", linewidth = 1),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 1),
+    plot.title = element_text(face = "bold", size = 16, hjust = 0),
+    plot.margin = margin(20, 12, 10, 24),
+    clip = "off"
+  )
+
+# ==============================================================================
+# PANEL B: SERENA
+# ==============================================================================
+serena_breaks <- seq(1200, 3000, by = 300)
+pB_pred <- fc_serena_df %>% filter(date >= min(plot_df_serena$date), date <= max(plot_df_serena$date))
+
+pB <- ggplot() +
+  geom_ribbon(data = pB_pred, aes(x = date, ymin = lower, ymax = upper), inherit.aes = FALSE, fill = conf_fill, alpha = 0.8) +
+  geom_line(data = pB_pred, aes(x = date, y = pred), inherit.aes = FALSE, color = conf_pred_col, linetype = "42", linewidth = 1.0) +
+  geom_line(data = plot_df_serena, aes(x = date, y = total_value), color = pre_event_col, linewidth = 1.4, lineend = "round") +
+  geom_line(data = subset(plot_df_serena, date >= event_serena), aes(x = date, y = total_value), color = nejm_blue, linewidth = 1.4, lineend = "round") +
+  annotate("segment", x = event_serena, xend = event_serena, y = 1200, yend = 2850, color = event_line_col, linewidth = 1.2) +
+  annotation_custom(grob = textGrob("//", x = unit(-0.08, "npc"), y = unit(-0.025, "npc"), gp = gpar(fontsize = 13, fontface = "bold", col = "black"))) +
+  scale_x_date(expand = c(0, 0), breaks = c(min(plot_df_serena$date), event_serena, max(plot_df_serena$date)), labels = function(x) format(x, "%b %d")) +
+  scale_y_continuous(breaks = serena_breaks, limits = c(1200, 3000), expand = c(0,0)) +
+  labs(title = "B", y = "Google Queries (per 10 million searches)", x = "Date") +
+  theme_bw(base_size = 14, base_family = font_family) +
+  theme(
+    panel.background = element_rect(fill = nejm_bg, color = nejm_bg),
+    plot.background = element_rect(fill = nejm_bg, color = NA),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.y = element_line(color="#d9d9d9", linewidth=0.5),
+    panel.grid.minor.y = element_blank(),
+    axis.line = element_line(color = "black", linewidth = 1),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 1),
+    plot.title = element_text(face = "bold", size = 16, hjust = 0),
+    plot.margin = margin(20, 12, 10, 24),
+    clip = "off"
+  )
+
+# ==============================================================================
+# COMBINE AND EXPORT
+# ==============================================================================
+nejm_fig <- pA / pB + plot_layout(ncol = 1, heights = c(1,1))
+print(nejm_fig)
+
+# Uncomment to save locally pdf/svg
+# ggsave("nejm_oprah_serena_final.pdf", nejm_fig, width = 6.25, height = 8.0, units = "in", bg = nejm_bg)
+# ggsave("nejm_oprah_serena_final.svg", nejm_fig, width = 6.25, height = 8.0, units = "in", bg = nejm_bg)
+```
+
+
+
+
+
+
+
+
